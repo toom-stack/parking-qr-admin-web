@@ -27,8 +27,10 @@ export function decodeJwt(token) {
     if (!token) return null;
     const parts = String(token).split(".");
     if (parts.length < 2) return null;
+
     const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
     const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+
     return JSON.parse(atob(padded));
   } catch {
     return null;
@@ -80,71 +82,45 @@ export const api = {
   },
 
   // =========================
-  // Vehicles (ADMIN)
+  // Vehicles
   // =========================
   async listVehicles({ q = "", page = 0, pageSize = 10 } = {}) {
-    const qs = new URLSearchParams({ q, page: String(page), pageSize: String(pageSize) });
-    return request(`/vehicles?${qs.toString()}`);
-  },
-
-  async createVehicle(payload) {
-    return request("/vehicles", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  },
-
-  async updateVehicle(id, payload) {
-    return request(`/vehicles/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  },
-
-  async deleteVehicle(id) {
-    return request(`/vehicles/${encodeURIComponent(id)}`, { method: "DELETE" });
-  },
-
-  // =========================
-  // Owners (ADMIN)
-  // =========================
-  async createOwner(payload) {
-    return request("/owners", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  },
-
-  async updateOwner(id, payload) {
-    return request(`/owners/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  },
-
-  async listOwners({ q = "", page = 0, pageSize = 10 } = {}) {
-    const qs = new URLSearchParams({ q, page: String(page), pageSize: String(pageSize) });
-    return request(`/owners?${qs.toString()}`);
-  },
-
-  // =========================
-  // Guards (ADMIN) ✅ path จริงคือ /admin/guards
-  // =========================
-  async listGuards({ q = "", page = 0, pageSize = 10, includeDisabled = false } = {}) {
     const qs = new URLSearchParams({
       q,
       page: String(page),
       pageSize: String(pageSize),
-      ...(includeDisabled ? { includeDisabled: "1" } : {}),
     });
+
+    return request(`/vehicles?${qs.toString()}`);
+  },
+
+  // =========================
+  // Reports (Admin)
+  // =========================
+  async listReports({ from, to, page = 0, pageSize = 10 } = {}) {
+    const qs = new URLSearchParams({
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+
+    return request(`/reports/admin?${qs.toString()}`);
+  },
+
+  // =========================
+  // Guards (Admin)
+  // =========================
+  async listGuards({ q = "", page = 0, pageSize = 10 } = {}) {
+    const qs = new URLSearchParams({
+      q,
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+
     return request(`/admin/guards?${qs.toString()}`);
   },
 
-  // ✅ เพิ่ม: Create Guard
   async createGuard(payload) {
     return request("/admin/guards", {
       method: "POST",
@@ -153,7 +129,6 @@ export const api = {
     });
   },
 
-  // ✅ เพิ่ม: Update Guard (รวม reset password + disabled)
   async updateGuard(id, payload) {
     return request(`/admin/guards/${encodeURIComponent(id)}`, {
       method: "PATCH",
@@ -162,33 +137,27 @@ export const api = {
     });
   },
 
-  // ✅ เพิ่ม: Disable Guard (backend ใช้ DELETE)
   async disableGuard(id) {
-    return request(`/admin/guards/${encodeURIComponent(id)}`, { method: "DELETE" });
-  },
-
-  // =========================
-  // Reports for Admin Web ✅ path จริงคือ /reports/admin
-  // =========================
-  async listReports({ from, to, problemType, page = 0, pageSize = 10 } = {}) {
-    const qs = new URLSearchParams({
-      ...(from ? { from } : {}),
-      ...(to ? { to } : {}),
-      ...(problemType ? { problemType } : {}),
-      page: String(page),
-      pageSize: String(pageSize),
+    return request(`/admin/guards/${encodeURIComponent(id)}`, {
+      method: "DELETE",
     });
-    return request(`/reports/admin?${qs.toString()}`);
   },
 
   // =========================
-  // QR / Badge ✅ path จริง
+  // Dashboard
+  // =========================
+  async dashboardSummary() {
+    return request("/reports/admin/summary");
+  },
+
+  // =========================
+  // Files
   // =========================
   qrPngUrl(qrToken) {
-    return `${BASE_URL}/qr/${encodeURIComponent(qrToken)}.png`;
+    return `${BASE_URL}/qr/png/${encodeURIComponent(qrToken)}`;
   },
 
   badgePdfUrl(qrToken) {
-    return `${BASE_URL}/badge/${encodeURIComponent(qrToken)}.pdf`;
+    return `${BASE_URL}/qr/badge/${encodeURIComponent(qrToken)}`;
   },
 };
