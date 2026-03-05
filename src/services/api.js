@@ -7,13 +7,16 @@ const ROLE_KEY = "role";
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY) || "";
 }
+
 export function getRole() {
   return localStorage.getItem(ROLE_KEY) || "";
 }
+
 export function setToken(token, role) {
   if (token && String(token).trim()) localStorage.setItem(TOKEN_KEY, String(token).trim());
   if (role && String(role).trim()) localStorage.setItem(ROLE_KEY, String(role).trim());
 }
+
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(ROLE_KEY);
@@ -65,7 +68,9 @@ async function request(path, { method = "GET", headers = {}, body } = {}) {
 export const api = {
   baseUrl: BASE_URL,
 
+  // =========================
   // Auth
+  // =========================
   async login(username, password) {
     return request("/auth/login", {
       method: "POST",
@@ -74,11 +79,14 @@ export const api = {
     });
   },
 
+  // =========================
   // Vehicles (ADMIN)
+  // =========================
   async listVehicles({ q = "", page = 0, pageSize = 10 } = {}) {
     const qs = new URLSearchParams({ q, page: String(page), pageSize: String(pageSize) });
     return request(`/vehicles?${qs.toString()}`);
   },
+
   async createVehicle(payload) {
     return request("/vehicles", {
       method: "POST",
@@ -86,6 +94,7 @@ export const api = {
       body: JSON.stringify(payload),
     });
   },
+
   async updateVehicle(id, payload) {
     return request(`/vehicles/${encodeURIComponent(id)}`, {
       method: "PATCH",
@@ -93,11 +102,14 @@ export const api = {
       body: JSON.stringify(payload),
     });
   },
+
   async deleteVehicle(id) {
     return request(`/vehicles/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
 
+  // =========================
   // Owners (ADMIN)
+  // =========================
   async createOwner(payload) {
     return request("/owners", {
       method: "POST",
@@ -105,6 +117,7 @@ export const api = {
       body: JSON.stringify(payload),
     });
   },
+
   async updateOwner(id, payload) {
     return request(`/owners/${encodeURIComponent(id)}`, {
       method: "PATCH",
@@ -112,12 +125,15 @@ export const api = {
       body: JSON.stringify(payload),
     });
   },
+
   async listOwners({ q = "", page = 0, pageSize = 10 } = {}) {
     const qs = new URLSearchParams({ q, page: String(page), pageSize: String(pageSize) });
     return request(`/owners?${qs.toString()}`);
   },
 
-  // Guards (ADMIN)  ✅ path จริงคือ /admin/guards
+  // =========================
+  // Guards (ADMIN) ✅ path จริงคือ /admin/guards
+  // =========================
   async listGuards({ q = "", page = 0, pageSize = 10, includeDisabled = false } = {}) {
     const qs = new URLSearchParams({
       q,
@@ -128,7 +144,32 @@ export const api = {
     return request(`/admin/guards?${qs.toString()}`);
   },
 
+  // ✅ เพิ่ม: Create Guard
+  async createGuard(payload) {
+    return request("/admin/guards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  // ✅ เพิ่ม: Update Guard (รวม reset password + disabled)
+  async updateGuard(id, payload) {
+    return request(`/admin/guards/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  // ✅ เพิ่ม: Disable Guard (backend ใช้ DELETE)
+  async disableGuard(id) {
+    return request(`/admin/guards/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+
+  // =========================
   // Reports for Admin Web ✅ path จริงคือ /reports/admin
+  // =========================
   async listReports({ from, to, problemType, page = 0, pageSize = 10 } = {}) {
     const qs = new URLSearchParams({
       ...(from ? { from } : {}),
@@ -140,10 +181,13 @@ export const api = {
     return request(`/reports/admin?${qs.toString()}`);
   },
 
+  // =========================
   // QR / Badge ✅ path จริง
+  // =========================
   qrPngUrl(qrToken) {
     return `${BASE_URL}/qr/${encodeURIComponent(qrToken)}.png`;
   },
+
   badgePdfUrl(qrToken) {
     return `${BASE_URL}/badge/${encodeURIComponent(qrToken)}.pdf`;
   },
