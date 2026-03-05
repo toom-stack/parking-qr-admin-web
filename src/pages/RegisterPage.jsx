@@ -56,7 +56,7 @@ export default function RegisterPage() {
     setErr("");
 
     try {
-      // backend: GET /vehicles include owner (คุณทำไว้แล้ว)
+      // backend: GET /vehicles include owner
       const data = await api.listVehicles({ q, page, pageSize, ...next });
       const items = Array.isArray(data?.items) ? data.items : [];
       setTotal(Number(data?.total || items.length));
@@ -257,29 +257,47 @@ export default function RegisterPage() {
 
   const columns = useMemo(
     () => [
-      { field: "ownerFullName", headerName: "ชื่อ-นามสกุล", flex: 1.4 },
-      { field: "ownerRoom", headerName: "ห้อง", flex: 0.6 },
-      { field: "ownerYear", headerName: "ชั้นปี", flex: 0.5 },
-      { field: "ownerFaculty", headerName: "คณะ", flex: 1 },
-      { field: "ownerMajor", headerName: "สาขา", flex: 1 },
-      { field: "ownerPhone", headerName: "เบอร์", flex: 1 },
-      { field: "plateNo", headerName: "ทะเบียน", flex: 0.9 },
-      { field: "brand", headerName: "ยี่ห้อ", flex: 0.9 },
-      { field: "model", headerName: "รุ่น", flex: 0.9 },
-      { field: "color", headerName: "สี", flex: 0.7 },
+      { field: "ownerFullName", headerName: "ชื่อ-นามสกุล", flex: 1.4, minWidth: 160 },
+      { field: "ownerRoom", headerName: "ห้อง", flex: 0.6, minWidth: 80 },
+      { field: "ownerYear", headerName: "ชั้นปี", flex: 0.5, minWidth: 80 },
+      { field: "ownerFaculty", headerName: "คณะ", flex: 1, minWidth: 120 },
+      { field: "ownerMajor", headerName: "สาขา", flex: 1, minWidth: 120 },
+      { field: "ownerPhone", headerName: "เบอร์", flex: 1, minWidth: 120 },
+      { field: "plateNo", headerName: "ทะเบียน", flex: 0.9, minWidth: 110 },
+      { field: "brand", headerName: "ยี่ห้อ", flex: 0.9, minWidth: 110 },
+      { field: "model", headerName: "รุ่น", flex: 0.9, minWidth: 110 },
+      { field: "color", headerName: "สี", flex: 0.7, minWidth: 90 },
+
+      // ✅ แก้จุดสำคัญ: คอลัมน์จัดการต้องไม่โดนบีบ
       {
         field: "_actions",
         headerName: "จัดการ",
         sortable: false,
         filterable: false,
-        flex: 2.0,
+        flex: 0,            // ✅ ไม่ให้ flex บีบ
+        minWidth: 320,      // ✅ กว้างขั้นต่ำให้ปุ่มโผล่ครบ
+        headerAlign: "right",
+        align: "right",
         renderCell: (params) => {
           const row = params.row;
           const qrToken = row.qrToken;
 
           return (
-            <Stack direction="row" spacing={1}>
-              <Button size="small" variant="outlined" onClick={() => openEdit(row)} disabled={busy}>
+            <Stack
+              direction="row"
+              spacing={1}
+              useFlexGap
+              flexWrap="wrap"     // ✅ ให้ปุ่มขึ้นบรรทัดใหม่ได้
+              justifyContent="flex-end"
+              sx={{ width: "100%" }}
+            >
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => openEdit(row)}
+                disabled={busy}
+                sx={{ whiteSpace: "nowrap" }}
+              >
                 แก้ไข
               </Button>
 
@@ -289,6 +307,7 @@ export default function RegisterPage() {
                 color="error"
                 onClick={() => deleteRow(row)}
                 disabled={busy}
+                sx={{ whiteSpace: "nowrap" }}
               >
                 ลบ
               </Button>
@@ -300,14 +319,16 @@ export default function RegisterPage() {
                     variant="outlined"
                     onClick={() => openAuthedFile(api.qrPngUrl(qrToken), "image/png")}
                     disabled={busy}
+                    sx={{ whiteSpace: "nowrap" }}
                   >
-                    QR
+                    ดู QR
                   </Button>
                   <Button
                     size="small"
                     variant="outlined"
                     onClick={() => openAuthedFile(api.badgePdfUrl(qrToken), "application/pdf")}
                     disabled={busy}
+                    sx={{ whiteSpace: "nowrap" }}
                   >
                     Badge
                   </Button>
@@ -463,6 +484,7 @@ export default function RegisterPage() {
                 load({ page: 0 });
               }}
               disabled={busy}
+              sx={{ whiteSpace: "nowrap" }}
             >
               ค้นหา
             </Button>
@@ -470,22 +492,35 @@ export default function RegisterPage() {
         </CardContent>
       </Card>
 
-      {/* ===== Single Table */}
-      <Box sx={{ height: 560, bgcolor: "background.paper" }}>
-        <DataGrid
-          rows={rows}
-          columns={columns}
-          loading={busy}
-          rowCount={total}
-          paginationMode="server"
-          pageSizeOptions={[10, 20, 50]}
-          paginationModel={{ page, pageSize }}
-          onPaginationModelChange={(m) => {
-            setPage(m.page);
-            setPageSize(m.pageSize);
-          }}
-          disableRowSelectionOnClick
-        />
+      {/* ===== Table (แก้ให้เลื่อนแนวนอน + ปุ่มไม่ถูกตัด) */}
+      <Box
+        sx={{
+          width: "100%",
+          bgcolor: "background.paper",
+          overflowX: "auto", // ✅ กันจอแคบ/คอลัมน์เยอะ
+          borderRadius: 1,
+        }}
+      >
+        <Box sx={{ height: 560, minWidth: 1100 }}>
+          <DataGrid
+            rows={rows}
+            columns={columns}
+            loading={busy}
+            rowCount={total}
+            paginationMode="server"
+            pageSizeOptions={[10, 20, 50]}
+            paginationModel={{ page, pageSize }}
+            onPaginationModelChange={(m) => {
+              setPage(m.page);
+              setPageSize(m.pageSize);
+            }}
+            disableRowSelectionOnClick
+            sx={{
+              // ✅ ทำให้ cell ไม่ตัดปุ่มแปลก ๆ
+              "& .MuiDataGrid-cell": { overflow: "visible" },
+            }}
+          />
+        </Box>
       </Box>
 
       {/* ===== Edit Dialog (owner + vehicle) */}
