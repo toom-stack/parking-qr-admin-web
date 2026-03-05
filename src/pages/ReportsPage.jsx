@@ -24,6 +24,21 @@ function pickValue(arg) {
   return arg;
 }
 
+function problemTh(t) {
+  switch (t) {
+    case "PARK_RED_WHITE":
+      return "เส้นขาวแดง";
+    case "BLOCKING":
+      return "กีดขวาง";
+    case "NO_PARKING":
+      return "ห้ามจอด";
+    case "OTHER":
+      return "อื่น ๆ";
+    default:
+      return t || "-";
+  }
+}
+
 export default function ReportsPage() {
   const [from, setFrom] = useState(dayjs().startOf("month").format("YYYY-MM-DD"));
   const [to, setTo] = useState(dayjs().format("YYYY-MM-DD"));
@@ -67,7 +82,7 @@ export default function ReportsPage() {
         id: r.id,
         reportedAt: r.reportedAt,
         problemType: r.problemType,
-        locationText: r.locationText || "",
+        locationText: r.locationText || "", // ✅ สถานที่
         note: r.note || "",
         plateNo: r.vehicle?.plateNo || "-",
         ownerName: r.vehicle?.owner?.fullName || "-",
@@ -92,7 +107,7 @@ export default function ReportsPage() {
   }, [page, pageSize]);
 
   // ========================
-  // ดูรูป
+  // ดูรูป/รายละเอียด
   // ========================
   const [viewOpen, setViewOpen] = useState(false);
   const [viewRow, setViewRow] = useState(null);
@@ -159,26 +174,48 @@ export default function ReportsPage() {
         field: "reportedAt",
         headerName: "วันที่",
         flex: 1,
+        minWidth: 160,
         valueFormatter: (arg) => {
           const v = pickValue(arg);
           return v ? dayjs(v).format("DD/MM/YYYY HH:mm") : "-";
         },
       },
-      { field: "plateNo", headerName: "ทะเบียน", flex: 1 },
-      { field: "ownerName", headerName: "เจ้าของ", flex: 1 },
-      { field: "problemType", headerName: "ปัญหา", flex: 1 },
-      { field: "guardName", headerName: "รายงานโดย", flex: 1 },
+      { field: "plateNo", headerName: "ทะเบียน", flex: 0.8, minWidth: 110 },
+      { field: "ownerName", headerName: "เจ้าของ", flex: 1, minWidth: 140 },
+      {
+        field: "problemType",
+        headerName: "ปัญหา",
+        flex: 0.9,
+        minWidth: 120,
+        valueFormatter: (arg) => problemTh(pickValue(arg)),
+      },
+
+      // ✅ เพิ่มคอลัมน์สถานที่
+      {
+        field: "locationText",
+        headerName: "สถานที่",
+        flex: 1.2,
+        minWidth: 180,
+        renderCell: (params) => {
+          const v = String(params.value || "").trim();
+          return v ? v : <span style={{ color: "#888" }}>-</span>;
+        },
+      },
+
+      { field: "guardName", headerName: "รายงานโดย", flex: 0.9, minWidth: 120 },
+
       {
         field: "_actions",
         headerName: "จัดการ",
-        flex: 2,
+        minWidth: 240,
+        flex: 0,
         sortable: false,
         renderCell: (params) => {
           const row = params.row;
           return (
-            <Stack direction="row" spacing={1}>
-              <Button size="small" onClick={() => openView(row)} disabled={!row.images.length}>
-                ดูรูป
+            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+              <Button size="small" onClick={() => openView(row)} disabled={!row.images.length && !row.locationText && !row.note}>
+                รายละเอียด
               </Button>
               <Button size="small" onClick={() => openEdit(row)}>
                 แก้ไข
@@ -210,7 +247,7 @@ export default function ReportsPage() {
               value={problemType}
               onChange={(e) => setProblemType(e.target.value)}
               size="small"
-              sx={{ minWidth: 150 }}
+              sx={{ minWidth: 160 }}
             >
               <MenuItem value="">ทั้งหมด</MenuItem>
               <MenuItem value="PARK_RED_WHITE">เส้นขาวแดง</MenuItem>
@@ -253,25 +290,45 @@ export default function ReportsPage() {
             setPage(m.page);
             setPageSize(m.pageSize);
           }}
+          disableRowSelectionOnClick
         />
       </Box>
 
-      {/* Dialog ดูรูป */}
+      {/* Dialog รายละเอียด + รูป */}
       <Dialog open={viewOpen} onClose={() => setViewOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>รูปหลักฐาน</DialogTitle>
+        <DialogTitle>รายละเอียดรายงาน</DialogTitle>
         <DialogContent>
+          <Stack spacing={1} sx={{ mb: 2 }}>
+            <Typography>
+              <b>ทะเบียน:</b> {viewRow?.plateNo || "-"}
+            </Typography>
+            <Typography>
+              <b>ปัญหา:</b> {problemTh(viewRow?.problemType)}
+            </Typography>
+            <Typography>
+              <b>สถานที่:</b> {String(viewRow?.locationText || "").trim() || "-"}
+            </Typography>
+            <Typography>
+              <b>หมายเหตุ:</b> {String(viewRow?.note || "").trim() || "-"}
+            </Typography>
+          </Stack>
+
           <Stack direction="row" spacing={2} flexWrap="wrap">
             {(viewRow?.images || []).map((img) => (
-              <Box key={img.id} sx={{ width: 220 }}>
+              <Box key={img.id || img.url} sx={{ width: 220 }}>
                 <img
                   src={img.url}
                   alt="evidence"
-                  style={{ width: "100%", height: 150, objectFit: "cover" }}
+                  style={{ width: "100%", height: 150, objectFit: "cover", cursor: "pointer" }}
                   onClick={() => window.open(img.url, "_blank")}
                 />
               </Box>
             ))}
           </Stack>
+
+          {!((viewRow?.images || []).length) && (
+            <Typography color="text.secondary">ไม่มีรูปแนบ</Typography>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setViewOpen(false)}>ปิด</Button>
@@ -329,7 +386,7 @@ export default function ReportsPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditOpen(false)}>ยกเลิก</Button>
-          <Button variant="contained" onClick={saveEdit}>
+          <Button variant="contained" onClick={saveEdit} disabled={busy}>
             บันทึก
           </Button>
         </DialogActions>
