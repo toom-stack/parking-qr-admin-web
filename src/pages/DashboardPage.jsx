@@ -23,7 +23,6 @@ import PlaceIcon from "@mui/icons-material/Place";
 
 import { api } from "../services/api";
 
-// ---------------- utils ----------------
 function pad2(n) {
   return String(n).padStart(2, "0");
 }
@@ -57,39 +56,17 @@ function problemTh(t) {
   }
 }
 
-// ---- robust fetch using token in localStorage ----
-const TOKEN_KEY = "token";
-function getTokenLS() {
-  return localStorage.getItem(TOKEN_KEY) || "";
-}
-async function fetchJson(path, { method = "GET", body, headers } = {}) {
-  const base = (api?.baseUrl || "https://parking-qr-backend.onrender.com").trim();
-  const token = getTokenLS();
-  const res = await fetch(`${base}${path}`, {
-    method,
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(headers || {}),
-    },
-    body,
-  });
-
-  const text = await res.text();
-  if (!res.ok) {
-    // backend บางทีส่ง html error
-    let msg = text;
-    try {
-      const j = text ? JSON.parse(text) : null;
-      msg = j?.message || j?.error || text;
-    } catch (_) {}
-    throw new Error(msg || `HTTP ${res.status}`);
+function sumTotalsFromSummary(summaryJson) {
+  const rows = Array.isArray(summaryJson?.data) ? summaryJson.data : [];
+  let total = 0;
+  const byType = {};
+  for (const r of rows) {
+    const type = String(r?.problemType || "OTHER");
+    const n = Number(r?.total || 0);
+    total += n;
+    byType[type] = (byType[type] || 0) + n;
   }
-
-  try {
-    return text ? JSON.parse(text) : null;
-  } catch {
-    return text;
-  }
+  return { total, byType, rows };
 }
 
 function maxByValue(obj) {
@@ -104,6 +81,13 @@ function maxByValue(obj) {
   return { key: bestK, value: bestV === -Infinity ? 0 : bestV };
 }
 
+function normLoc(s) {
+  const x = String(s || "").trim();
+  if (!x) return "";
+  // รวมที่คล้ายกันแบบง่าย ๆ (ปรับได้)
+  return x.replace(/\s+/g, " ");
+}
+
 export default function DashboardPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -116,12 +100,12 @@ export default function DashboardPage() {
   const [monthCount, setMonthCount] = useState(0);
   const [topProblem, setTopProblem] = useState({ label: "-", count: 0 });
 
-  const [byTypeMonth, setByTypeMonth] = useState([]); // [{type,label,total}]
-  const [series7d, setSeries7d] = useState([]); // [{label,total}]
-  const [topVehicles, setTopVehicles] = useState([]); // [{plateNo,brand,model,total}]
+  const [byTypeMonth, setByTypeMonth] = useState([]);
+  const [series7d, setSeries7d] = useState([]); // [{label, total}]
+  const [topVehicles, setTopVehicles] = useState([]);
 
-  // ✅ NEW: Top locations
-  const [topLocations, setTopLocations] = useState([]); // [{locationText,total}]
+  // ✅ ใหม่: top locations (จาก /reports/admin)
+  const [topLocations, setTopLocations] = useState([]); // [{label,total}]
 
   const now = useMemo(() => new Date(), []);
   const today = useMemo(() => startOfDay(new Date()), []);
@@ -129,15 +113,9 @@ export default function DashboardPage() {
 
   const range = useMemo(() => {
     const t = startOfDay(new Date());
-    if (mode === "today") {
-      return { from: t, to: t, title: "วันนี้" };
-    }
-    if (mode === "7d") {
-      const from = addDays(t, -6);
-      return { from, to: t, title: "7 วันล่าสุด" };
-    }
-    const from = startOfMonth(new Date());
-    return { from, to: t, title: "เดือนนี้" };
+    if (mode === "today") return { from: t, to: t, title: "วันนี้" };
+    if (mode === "7d") return { from: addDays(t, -6), to: t, title: "7 วันล่าสุด" };
+    return { from: startOfMonth(new Date()), to: t, title: "เดือนนี้" };
   }, [mode]);
 
   async function load() {
@@ -145,94 +123,97 @@ export default function DashboardPage() {
     setBusy(true);
 
     try {
-      // -----------------------------------------
-      // 1) ✅ Dashboard summary from backend:
-      // GET /reports/admin/summary
-      // returns:
-      // { todayTotal, monthTotal, topProblemTypes:[{problemType,total}], topLocations:[{locationText,total}], dailySeries:[{date,total}] }
-      // -----------------------------------------
-      const sum = await fetchJson("/reports/admin/summary", {
-        method: "GET",
+      // 1) Today count
+      const sumToday = await api.reportsSummary({
+        from: fmtYYYYMMDD(today),
+        to: fmtYYYYMMDD(today),
+        group: "day",
       });
+      const t = sumTotalsFromSummary(sumToday).total;
 
-      const todayTotal = Number(sum?.todayTotal || 0);
-      const monthTotal = Number(sum?.monthTotal || 0);
-
-      const tp = Array.isArray(sum?.topProblemTypes) ? sum.topProblemTypes : [];
-      const tl = Array.isArray(sum?.topLocations) ? sum.topLocations : [];
-
-      // top problem
-      const byType = {};
-      for (const r of tp) {
-        const type = String(r?.problemType || "OTHER");
-        const n = Number(r?.total || r?._count?._all || 0);
-        byType[type] = (byType[type] || 0) + n;
-      }
-      const top = maxByValue(byType);
-      setTopProblem({
-        label: top.key ? problemTh(top.key) : "-",
-        count: top.value || 0,
+      // 2) Month count + byType + top problem in month
+      const sumMonth = await api.reportsSummary({
+        from: fmtYYYYMMDD(monthStart),
+        to: fmtYYYYMMDD(today),
+        group: "day",
       });
+      const monthAgg = sumTotalsFromSummary(sumMonth);
+      const m = monthAgg.total;
 
-      // by type month (เรียงมาก -> น้อย)
-      const byTypeArr = Object.entries(byType)
+      const top = maxByValue(monthAgg.byType);
+      const topProblemLabel = top.key ? problemTh(top.key) : "-";
+
+      const byTypeArr = Object.entries(monthAgg.byType)
         .map(([k, v]) => ({ type: k, label: problemTh(k), total: v }))
         .sort((a, b) => b.total - a.total);
-      setByTypeMonth(byTypeArr);
 
-      // ✅ locations
-      const locationsNorm = tl
-        .map((x) => ({
-          locationText: String(x?.locationText || "").trim(),
-          total: Number(x?.total || x?._count?._all || 0),
-        }))
-        .filter((x) => x.locationText.length > 0)
-        .sort((a, b) => b.total - a.total);
-      setTopLocations(locationsNorm);
+      // 3) 7 days series
+      const from7 = addDays(today, -6);
+      const sum7 = await api.reportsSummary({
+        from: fmtYYYYMMDD(from7),
+        to: fmtYYYYMMDD(today),
+        group: "day",
+      });
 
-      setTodayCount(todayTotal);
-      setMonthCount(monthTotal);
-
-      // -----------------------------------------
-      // 2) 7 วันล่าสุด: ถ้า backend ส่ง dailySeries มาก็ใช้เลย
-      // ถ้าไม่มีก็ fallback ให้เป็น 0
-      // -----------------------------------------
-      const daily = Array.isArray(sum?.dailySeries) ? sum.dailySeries : [];
+      const rows7 = Array.isArray(sum7?.data) ? sum7.data : [];
       const mapDay = {};
-      for (const r of daily) {
-        const key = String(r?.date || r?.period || "").trim(); // รองรับทั้ง date/period
+      for (const r of rows7) {
+        const p = String(r?.period || "");
         const n = Number(r?.total || 0);
-        if (key) mapDay[key] = (mapDay[key] || 0) + n;
+        if (!p) continue;
+        mapDay[p] = (mapDay[p] || 0) + n;
       }
 
-      const from7 = addDays(today, -6);
       const series = [];
       for (let i = 0; i < 7; i++) {
         const d = addDays(from7, i);
         const key = fmtYYYYMMDD(d);
-        series.push({ label: key.slice(5), total: mapDay[key] || 0 });
+        series.push({ label: key.slice(5), total: mapDay[key] || 0 }); // MM-DD
       }
-      setSeries7d(series);
 
-      // -----------------------------------------
-      // 3) Top vehicles for selected range
-      // GET /reports/top-vehicles?from&to&limit
-      // -----------------------------------------
-      const qs = new URLSearchParams({
+      // 4) Top vehicles for selected range
+      const topV = await api.topVehicles({
         from: fmtYYYYMMDD(range.from),
         to: fmtYYYYMMDD(range.to),
-        limit: "10",
+        limit: 10,
       });
-
-      const topV = await fetchJson(`/reports/top-vehicles?${qs.toString()}`);
-      const tv = Array.isArray(topV?.data) ? topV.data : Array.isArray(topV) ? topV : [];
+      const tv = Array.isArray(topV?.data) ? topV.data : [];
       const tvNorm = tv.map((x) => ({
         plateNo: String(x?.plateNo || "-"),
         brand: String(x?.brand || ""),
         model: String(x?.model || ""),
         total: Number(x?.total || 0),
       }));
+
+      // ✅ 5) Top locations (จากรายงานจริง /reports/admin)
+      // หมายเหตุ: ถ้ารายงานเยอะมาก คุณค่อยทำ endpoint สรุปฝั่ง backend เพิ่มทีหลังได้
+      const locRes = await api.listReports({
+        from: fmtYYYYMMDD(range.from),
+        to: fmtYYYYMMDD(range.to),
+        page: 0,
+        pageSize: 200, // เอาพอประมาณก่อน
+      });
+
+      const locItems = Array.isArray(locRes?.items) ? locRes.items : [];
+      const locMap = {};
+      for (const r of locItems) {
+        const loc = normLoc(r?.locationText);
+        if (!loc) continue;
+        locMap[loc] = (locMap[loc] || 0) + 1;
+      }
+
+      const locArr = Object.entries(locMap)
+        .map(([label, total]) => ({ label, total }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 8);
+
+      setTodayCount(t);
+      setMonthCount(m);
+      setTopProblem({ label: topProblemLabel, count: top.value || 0 });
+      setByTypeMonth(byTypeArr);
+      setSeries7d(series);
       setTopVehicles(tvNorm);
+      setTopLocations(locArr);
     } catch (e) {
       setErr(e?.message || "โหลด Dashboard ไม่สำเร็จ");
     } finally {
@@ -267,7 +248,7 @@ export default function DashboardPage() {
           </Typography>
         </Box>
 
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+        <Stack direction="row" spacing={1} alignItems="center">
           <Chip
             icon={<TodayIcon />}
             label="วันนี้"
@@ -435,27 +416,22 @@ export default function DashboardPage() {
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                 <PlaceIcon fontSize="small" />
-                <Typography fontWeight={900}>สถานที่ที่โดนรายงานบ่อย (Top 8)</Typography>
+                <Typography fontWeight={900}>สถานที่ที่ถูกรายงานบ่อย — ช่วง: {range.title}</Typography>
               </Stack>
-              <Typography variant="body2" color="text.secondary">
-                อ้างอิงจากช่อง “locationText” ในรายงาน
-              </Typography>
-
-              <Divider sx={{ my: 1.5 }} />
 
               {topLocations.length === 0 ? (
-                <Typography color="text.secondary">ยังไม่มีข้อมูลสถานที่ (หรือรายงานยังไม่กรอก locationText)</Typography>
+                <Typography color="text.secondary">ยังไม่มี location ในช่วงนี้</Typography>
               ) : (
-                <Stack spacing={1.2}>
-                  {topLocations.slice(0, 8).map((x, idx) => (
-                    <Box key={`${x.locationText}-${idx}`}>
+                <Stack spacing={1.2} sx={{ mt: 1 }}>
+                  {topLocations.map((x) => (
+                    <Box key={x.label}>
                       <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Typography variant="body2">{x.label}</Typography>
                         <Typography variant="body2" fontWeight={800}>
-                          {idx + 1}. {x.locationText}
+                          {x.total}
                         </Typography>
-                        <Chip label={`${x.total} ครั้ง`} size="small" variant="outlined" />
                       </Stack>
                       <LinearProgress
                         variant="determinate"
@@ -466,6 +442,10 @@ export default function DashboardPage() {
                   ))}
                 </Stack>
               )}
+
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                * ดึงจาก /reports/admin (pageSize 200) ถ้ารายงานเยอะมากค่อยทำ endpoint summary ฝั่ง backend เพิ่ม
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -474,13 +454,17 @@ export default function DashboardPage() {
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-                <DirectionsCarIcon fontSize="small" />
-                <Typography fontWeight={900}>รถที่ถูกรายงานมากสุด (Top 10) — ช่วง: {range.title}</Typography>
+              <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "center" }} gap={1}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <DirectionsCarIcon fontSize="small" />
+                  <Typography fontWeight={900}>
+                    รถที่ถูกรายงานมากสุด (Top 10) — ช่วง: {range.title}
+                  </Typography>
+                </Stack>
+                <Typography variant="body2" color="text.secondary">
+                  {fmtYYYYMMDD(range.from)} ถึง {fmtYYYYMMDD(range.to)}
+                </Typography>
               </Stack>
-              <Typography variant="body2" color="text.secondary">
-                {fmtYYYYMMDD(range.from)} ถึง {fmtYYYYMMDD(range.to)}
-              </Typography>
 
               <Divider sx={{ my: 1.5 }} />
 
@@ -490,12 +474,7 @@ export default function DashboardPage() {
                 <Stack spacing={1}>
                   {topVehicles.map((v, idx) => (
                     <Box key={`${v.plateNo}-${idx}`} sx={{ p: 1, borderRadius: 2, bgcolor: "rgba(0,0,0,0.02)" }}>
-                      <Stack
-                        direction={{ xs: "column", md: "row" }}
-                        justifyContent="space-between"
-                        alignItems={{ md: "center" }}
-                        gap={0.5}
-                      >
+                      <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "center" }} gap={0.5}>
                         <Box>
                           <Typography fontWeight={900}>
                             {idx + 1}. {v.plateNo}{" "}

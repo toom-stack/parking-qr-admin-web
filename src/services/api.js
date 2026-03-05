@@ -7,16 +7,13 @@ const ROLE_KEY = "role";
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY) || "";
 }
-
 export function getRole() {
   return localStorage.getItem(ROLE_KEY) || "";
 }
-
 export function setToken(token, role) {
   if (token && String(token).trim()) localStorage.setItem(TOKEN_KEY, String(token).trim());
   if (role && String(role).trim()) localStorage.setItem(ROLE_KEY, String(role).trim());
 }
-
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(ROLE_KEY);
@@ -52,6 +49,7 @@ async function request(path, { method = "GET", headers = {}, body } = {}) {
   const text = await res.text();
 
   if (!res.ok) {
+    // พยายาม parse JSON error
     try {
       const j = text ? JSON.parse(text) : null;
       throw new Error(j?.message || j?.error || text || `HTTP ${res.status}`);
@@ -65,6 +63,19 @@ async function request(path, { method = "GET", headers = {}, body } = {}) {
   } catch {
     return text;
   }
+}
+
+// ✅ helper: บางโปรเจค route summary/topVehicles อาจอยู่คนละ path
+async function tryMany(paths, options) {
+  let lastErr = null;
+  for (const p of paths) {
+    try {
+      return await request(p, options);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("Request failed");
 }
 
 export const api = {
@@ -82,7 +93,35 @@ export const api = {
   },
 
   // =========================
-  // Vehicles
+  // Owners (ADMIN)
+  // =========================
+  async createOwner(payload) {
+    return request("/owners", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateOwner(id, payload) {
+    return request(`/owners/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async listOwners({ q = "", page = 0, pageSize = 10 } = {}) {
+    const qs = new URLSearchParams({
+      q,
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    return request(`/owners?${qs.toString()}`);
+  },
+
+  // =========================
+  // Vehicles (ADMIN)
   // =========================
   async listVehicles({ q = "", page = 0, pageSize = 10 } = {}) {
     const qs = new URLSearchParams({
@@ -90,34 +129,39 @@ export const api = {
       page: String(page),
       pageSize: String(pageSize),
     });
-
     return request(`/vehicles?${qs.toString()}`);
   },
 
-  // =========================
-  // Reports (Admin)
-  // =========================
-  async listReports({ from, to, page = 0, pageSize = 10 } = {}) {
-    const qs = new URLSearchParams({
-      ...(from ? { from } : {}),
-      ...(to ? { to } : {}),
-      page: String(page),
-      pageSize: String(pageSize),
+  async createVehicle(payload) {
+    return request("/vehicles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
+  },
 
-    return request(`/reports/admin?${qs.toString()}`);
+  async updateVehicle(id, payload) {
+    return request(`/vehicles/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteVehicle(id) {
+    return request(`/vehicles/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
 
   // =========================
-  // Guards (Admin)
+  // Guards (ADMIN)
   // =========================
-  async listGuards({ q = "", page = 0, pageSize = 10 } = {}) {
+  async listGuards({ q = "", page = 0, pageSize = 10, includeDisabled = false } = {}) {
     const qs = new URLSearchParams({
       q,
       page: String(page),
       pageSize: String(pageSize),
+      ...(includeDisabled ? { includeDisabled: "1" } : {}),
     });
-
     return request(`/admin/guards?${qs.toString()}`);
   },
 
@@ -138,26 +182,59 @@ export const api = {
   },
 
   async disableGuard(id) {
-    return request(`/admin/guards/${encodeURIComponent(id)}`, {
-      method: "DELETE",
+    return request(`/admin/guards/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+
+  // =========================
+  // Reports (ADMIN)
+  // =========================
+  async listReports({ from, to, problemType, page = 0, pageSize = 10 } = {}) {
+    const qs = new URLSearchParams({
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+      ...(problemType ? { problemType } : {}),
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    return request(`/reports/admin?${qs.toString()}`);
+  },
+
+  // =========================
+  // Dashboard helpers
+  // =========================
+  async reportsSummary({ from, to, group = "day" } = {}) {
+    const qs = new URLSearchParams({
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+      group,
+    });
+
+    // ✅ ลองหลาย path กัน 404
+    return tryMany([`/reports/summary?${qs.toString()}`, `/reports/admin/summary?${qs.toString()}`], { method: "GET" });
+  },
+
+  async topVehicles({ from, to, limit = 10 } = {}) {
+    const qs = new URLSearchParams({
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+      limit: String(limit),
+    });
+
+    // ✅ ลองหลาย path กัน 404
+    return tryMany([`/reports/top-vehicles?${qs.toString()}`, `/reports/admin/top-vehicles?${qs.toString()}`], {
+      method: "GET",
     });
   },
 
   // =========================
-  // Dashboard
-  // =========================
-  async dashboardSummary() {
-    return request("/reports/admin/summary");
-  },
-
-  // =========================
-  // Files
+  // Files (✅ แก้ path ให้ตรง backend ของคุณ)
+  // ตัวที่ถูกต้องคือ /qr/<token>.png และ /badge/<token>.pdf
   // =========================
   qrPngUrl(qrToken) {
-    return `${BASE_URL}/qr/png/${encodeURIComponent(qrToken)}`;
+    return `${BASE_URL}/qr/${encodeURIComponent(qrToken)}.png`;
   },
 
   badgePdfUrl(qrToken) {
-    return `${BASE_URL}/qr/badge/${encodeURIComponent(qrToken)}`;
+    return `${BASE_URL}/badge/${encodeURIComponent(qrToken)}.pdf`;
   },
 };
