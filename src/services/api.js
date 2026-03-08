@@ -203,9 +203,17 @@ export const api = {
     return request(`/reports/top-vehicles?${qs.toString()}`);
   },
 
-  async adminSummary() {
-    return request("/reports/admin/summary");
-  },
+  async adminSummary(params = {}) {
+  const qs = new URLSearchParams({
+    ...(params?.from ? { from: params.from } : {}),
+    ...(params?.to ? { to: params.to } : {}),
+    ...(params?.range ? { range: params.range } : {}),
+    ...(params?.period ? { period: params.period } : {}),
+  });
+
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request(`/reports/admin/summary${suffix}`);
+},
 
   qrPngUrl(qrToken) {
     return `${BASE_URL}/qr/${encodeURIComponent(qrToken)}.png`;

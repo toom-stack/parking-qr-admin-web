@@ -39,69 +39,12 @@ function startOfDay(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-function startOfMonth(d) {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-
-function addDays(d, days) {
-  const x = new Date(d);
-  x.setDate(x.getDate() + days);
-  return x;
-}
-
 function formatDateTime(d) {
   try {
     return new Date(d).toLocaleString("th-TH");
   } catch {
     return "-";
   }
-}
-
-function problemTh(t) {
-  switch (t) {
-    case "PARK_RED_WHITE":
-      return "จอดขาวแดง";
-    case "BLOCKING":
-      return "กีดขวาง";
-    case "NO_PARKING":
-      return "ห้ามจอด";
-    case "OTHER":
-      return "อื่น ๆ";
-    default:
-      return t || "-";
-  }
-}
-
-function sumTotalsFromSummary(summaryJson) {
-  const rows = Array.isArray(summaryJson?.data) ? summaryJson.data : [];
-  let total = 0;
-  const byType = {};
-
-  for (const r of rows) {
-    const type = String(r?.problemType || "OTHER");
-    const n = Number(r?.total || 0);
-    total += n;
-    byType[type] = (byType[type] || 0) + n;
-  }
-
-  return { total, byType, rows };
-}
-
-function maxByValue(obj) {
-  let bestK = "";
-  let bestV = -Infinity;
-
-  for (const [k, v] of Object.entries(obj || {})) {
-    if (v > bestV) {
-      bestV = v;
-      bestK = k;
-    }
-  }
-
-  return {
-    key: bestK,
-    value: bestV === -Infinity ? 0 : bestV,
-  };
 }
 
 function safeMessage(e) {
@@ -264,22 +207,18 @@ export default function DashboardPage() {
   const [series7d, setSeries7d] = useState([]);
   const [topVehicles, setTopVehicles] = useState([]);
   const [topLocations, setTopLocations] = useState([]);
+  const [rangeLabel, setRangeLabel] = useState("-");
 
-  const today = useMemo(() => startOfDay(new Date()), []);
-  const monthStart = useMemo(() => startOfMonth(new Date()), []);
+  const summaryParams = useMemo(() => {
+    if (mode === "today") return { range: "today" };
+    if (mode === "7d") return { range: "7days" };
+    return { range: "month" };
+  }, [mode]);
 
-  const range = useMemo(() => {
-    const t = startOfDay(new Date());
-
-    if (mode === "today") {
-      return { from: t, to: t, title: "วันนี้" };
-    }
-
-    if (mode === "7d") {
-      return { from: addDays(t, -6), to: t, title: "7 วันล่าสุด" };
-    }
-
-    return { from: startOfMonth(new Date()), to: t, title: "เดือนนี้" };
+  const rangeTitle = useMemo(() => {
+    if (mode === "today") return "วันนี้";
+    if (mode === "7d") return "7 วันล่าสุด";
+    return "เดือนนี้";
   }, [mode]);
 
   async function load() {
@@ -287,84 +226,46 @@ export default function DashboardPage() {
     setBusy(true);
 
     try {
-      // 1) KPI + top problems + top locations จาก backend summary
-      const adminSum = await api.adminSummary();
+      const adminSum = await api.adminSummary(summaryParams);
 
-      const todayTotal = Number(adminSum?.todayTotal || 0);
-      const monthTotal = Number(adminSum?.monthTotal || 0);
+      const todayTotal = Number(adminSum?.todayCount || 0);
+      const monthTotal = Number(adminSum?.monthCount || 0);
 
-      const problemRows = Array.isArray(adminSum?.topProblems) ? adminSum.topProblems : [];
+      const topProblemObj = adminSum?.topProblem || null;
+      const topProblemLabel = topProblemObj?.label || "-";
+      const topProblemCount = Number(topProblemObj?.count || 0);
+
       const locationRows = Array.isArray(adminSum?.topLocations) ? adminSum.topLocations : [];
-
-      const topP = problemRows[0];
-      const topProblemLabel = topP?.problemType ? problemTh(topP.problemType) : "-";
-      const topProblemCount = Number(topP?._count?.problemType || 0);
-
       const topLocArr = locationRows
-        .filter((x) => String(x?.locationText || "").trim())
+        .filter((x) => String(x?.label || x?.locationText || "").trim())
         .map((x) => ({
-          label: String(x?.locationText || "-"),
-          total: Number(x?._count?.locationText || 0),
+          label: String(x?.label || x?.locationText || "-"),
+          total: Number(x?.count || 0),
         }));
 
-      // 2) ประเภทปัญหาเดือนนี้
-      const sumMonth = await api.reportsSummary({
-        from: fmtYYYYMMDD(monthStart),
-        to: fmtYYYYMMDD(today),
-        group: "day",
-      });
-
-      const monthAgg = sumTotalsFromSummary(sumMonth);
-
-      const byTypeArr = Object.entries(monthAgg.byType)
-        .map(([k, v]) => ({
-          type: k,
-          label: problemTh(k),
-          total: Number(v || 0),
+      const problemRows = Array.isArray(adminSum?.problemBreakdown)
+        ? adminSum.problemBreakdown
+        : [];
+      const byTypeArr = problemRows
+        .map((x) => ({
+          type: x?.problemType || "OTHER",
+          label: x?.label || "-",
+          total: Number(x?.count || 0),
         }))
         .sort((a, b) => b.total - a.total);
 
-      // 3) กราฟ 7 วัน
-      const from7 = addDays(today, -6);
-      const sum7 = await api.reportsSummary({
-        from: fmtYYYYMMDD(from7),
-        to: fmtYYYYMMDD(today),
-        group: "day",
-      });
+      const trendRows = Array.isArray(adminSum?.trend7Days) ? adminSum.trend7Days : [];
+      const series = trendRows.map((x) => ({
+        label: String(x?.date || "").slice(5) || "-",
+        total: Number(x?.count || 0),
+      }));
 
-      const rows7 = Array.isArray(sum7?.data) ? sum7.data : [];
-      const mapDay = {};
-
-      for (const r of rows7) {
-        const p = String(r?.period || "");
-        const n = Number(r?.total || 0);
-        if (!p) continue;
-        mapDay[p] = (mapDay[p] || 0) + n;
-      }
-
-      const series = [];
-      for (let i = 0; i < 7; i++) {
-        const d = addDays(from7, i);
-        const key = fmtYYYYMMDD(d);
-        series.push({
-          label: key.slice(5),
-          total: mapDay[key] || 0,
-        });
-      }
-
-      // 4) top vehicles ตามช่วงที่เลือก
-      const topV = await api.topVehicles({
-        from: fmtYYYYMMDD(range.from),
-        to: fmtYYYYMMDD(range.to),
-        limit: 10,
-      });
-
-      const tv = Array.isArray(topV?.data) ? topV.data : [];
-      const tvNorm = tv.map((x) => ({
+      const topVRows = Array.isArray(adminSum?.topVehicles) ? adminSum.topVehicles : [];
+      const tvNorm = topVRows.map((x) => ({
         plateNo: String(x?.plateNo || "-"),
         brand: String(x?.brand || ""),
         model: String(x?.model || ""),
-        total: Number(x?.total || 0),
+        total: Number(x?.count || 0),
       }));
 
       setTodayCount(todayTotal);
@@ -374,6 +275,7 @@ export default function DashboardPage() {
       setSeries7d(series);
       setTopVehicles(tvNorm);
       setTopLocations(topLocArr);
+      setRangeLabel(adminSum?.range?.label || rangeTitle);
       setLastUpdated(new Date());
     } catch (e) {
       setErr(safeMessage(e));
@@ -545,7 +447,7 @@ export default function DashboardPage() {
         <Grid item xs={12} md={6}>
           <SectionCard
             title="สัดส่วนตามประเภทปัญหา"
-            subtitle="รวมเฉพาะข้อมูลของเดือนนี้"
+            subtitle="รวมตามช่วงเวลาที่เลือก"
             icon={<ReportProblemIcon fontSize="small" />}
           >
             <BarList
@@ -579,11 +481,11 @@ export default function DashboardPage() {
         <Grid item xs={12} md={6}>
           <SectionCard
             title="รถที่ถูกรายงานมากสุด (Top 10)"
-            subtitle={`${fmtYYYYMMDD(range.from)} ถึง ${fmtYYYYMMDD(range.to)}`}
+            subtitle={rangeLabel}
             icon={<DirectionsCarIcon fontSize="small" />}
             right={
               <Chip
-                label={`ช่วง: ${range.title}`}
+                label={`ช่วง: ${rangeTitle}`}
                 color="primary"
                 variant="outlined"
                 size="small"
