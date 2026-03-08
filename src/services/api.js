@@ -1,5 +1,5 @@
 // src/services/api.js
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL || "https://parking-qr-backend.onrender.com").trim();
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL || "https://parking-qr-server.onrender.com").trim();
 
 const TOKEN_KEY = "token";
 const ROLE_KEY = "role";
@@ -70,9 +70,6 @@ async function request(path, { method = "GET", headers = {}, body } = {}) {
 export const api = {
   baseUrl: BASE_URL,
 
-  // =========================
-  // Auth
-  // =========================
   async login(username, password) {
     return request("/auth/login", {
       method: "POST",
@@ -81,9 +78,6 @@ export const api = {
     });
   },
 
-  // =========================
-  // Vehicles
-  // =========================
   async listVehicles({ q = "", page = 0, pageSize = 10 } = {}) {
     const qs = new URLSearchParams({
       q,
@@ -113,9 +107,6 @@ export const api = {
     return request(`/vehicles/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
 
-  // =========================
-  // Owners
-  // =========================
   async createOwner(payload) {
     return request("/owners", {
       method: "POST",
@@ -141,9 +132,6 @@ export const api = {
     return request(`/owners?${qs.toString()}`);
   },
 
-  // =========================
-  // Guards (Admin)
-  // =========================
   async listGuards({ q = "", page = 0, pageSize = 10, includeDisabled = false } = {}) {
     const qs = new URLSearchParams({
       q,
@@ -174,9 +162,6 @@ export const api = {
     return request(`/admin/guards/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
 
-  // =========================
-  // Reports (Admin)
-  // =========================
   async listReports({ from, to, problemType, page = 0, pageSize = 10 } = {}) {
     const qs = new URLSearchParams({
       ...(from ? { from } : {}),
@@ -188,7 +173,6 @@ export const api = {
     return request(`/reports/admin?${qs.toString()}`);
   },
 
-  // ✅ backend จริงของคุณใช้ /reports/:id
   async updateReport(id, payload) {
     return request(`/reports/${encodeURIComponent(id)}`, {
       method: "PATCH",
@@ -197,14 +181,10 @@ export const api = {
     });
   },
 
-  // ✅ backend จริงของคุณใช้ /reports/:id
   async deleteReport(id) {
     return request(`/reports/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
 
-  // =========================
-  // Dashboard
-  // =========================
   async reportsSummary({ from, to, group = "day" } = {}) {
     const qs = new URLSearchParams({
       ...(from ? { from } : {}),
@@ -223,14 +203,10 @@ export const api = {
     return request(`/reports/top-vehicles?${qs.toString()}`);
   },
 
-  // ✅ ใช้ endpoint ใหม่จาก backend
   async adminSummary() {
     return request("/reports/admin/summary");
   },
 
-  // =========================
-  // Files
-  // =========================
   qrPngUrl(qrToken) {
     return `${BASE_URL}/qr/${encodeURIComponent(qrToken)}.png`;
   },
