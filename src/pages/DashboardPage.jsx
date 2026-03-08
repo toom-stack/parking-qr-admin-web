@@ -80,6 +80,14 @@ function formatDateTime(value) {
   )}:${pad2(d.getMinutes())}`;
 }
 
+function getReportLocation(report) {
+  return report?.locationText?.trim() || "";
+}
+
+function getReportDate(report) {
+  return report?.reportedAt || report?.createdAt || null;
+}
+
 // ---------------- small components ----------------
 function SectionCard({ title, subtitle, children }) {
   return (
@@ -171,6 +179,9 @@ function StatCard({ title, value, subtitle, icon }) {
 }
 
 function ReportItem({ report }) {
+  const locationText = getReportLocation(report);
+  const reportTime = getReportDate(report);
+
   return (
     <Paper
       variant="outlined"
@@ -207,13 +218,13 @@ function ReportItem({ report }) {
             />
             <Chip
               size="small"
-              label={`สถานที่: ${report.location || "-"}`}
+              label={`สถานที่: ${locationText || "-"}`}
               variant="outlined"
             />
           </Stack>
 
           <Typography variant="body2" color="text.secondary">
-            เวลา: {formatDateTime(report.createdAt)}
+            เวลา: {formatDateTime(reportTime)}
           </Typography>
         </Box>
       </Stack>
@@ -234,6 +245,9 @@ export default function DashboardPage() {
       const data = await api.listReports({
         pageSize: 500,
       });
+
+      console.log("dashboard items =", data?.items);
+      console.log("first dashboard item =", data?.items?.[0]);
 
       setItems(Array.isArray(data?.items) ? data.items : []);
     } catch (err) {
@@ -260,21 +274,31 @@ export default function DashboardPage() {
     const month = startOfMonth(new Date());
 
     const safeItems = [...items].sort(
-      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+      (a, b) => new Date(getReportDate(b) || 0) - new Date(getReportDate(a) || 0)
     );
 
-    const todayItems = safeItems.filter((r) => new Date(r.createdAt) >= today);
-    const monthItems = safeItems.filter((r) => new Date(r.createdAt) >= month);
+    const todayItems = safeItems.filter((r) => {
+      const date = getReportDate(r);
+      return date ? new Date(date) >= today : false;
+    });
+
+    const monthItems = safeItems.filter((r) => {
+      const date = getReportDate(r);
+      return date ? new Date(date) >= month : false;
+    });
 
     const problemCount = {};
     const locationCount = {};
 
     safeItems.forEach((r) => {
       const p = r.problemType || "OTHER";
-      const l = r.location || "ไม่ระบุ";
+      const l = getReportLocation(r);
 
       problemCount[p] = (problemCount[p] || 0) + 1;
-      locationCount[l] = (locationCount[l] || 0) + 1;
+
+      if (l) {
+        locationCount[l] = (locationCount[l] || 0) + 1;
+      }
     });
 
     const topP = Object.entries(problemCount).sort((a, b) => b[1] - a[1])[0];
@@ -288,7 +312,11 @@ export default function DashboardPage() {
     }
 
     const chart = days.map((day) => {
-      const count = safeItems.filter((r) => sameDay(new Date(r.createdAt), day)).length;
+      const count = safeItems.filter((r) => {
+        const date = getReportDate(r);
+        return date ? sameDay(new Date(date), day) : false;
+      }).length;
+
       return {
         date: formatDateLabel(day),
         count,
@@ -307,7 +335,7 @@ export default function DashboardPage() {
       todayCount: todayItems.length,
       monthCount: monthItems.length,
       topProblem: topP ? problemLabel(topP[0]) : "-",
-      topLocation: topL ? topL[0] : "-",
+      topLocation: topL ? topL[0] : "ยังไม่มีข้อมูลสถานที่",
       chartData: chart,
       latestReports: safeItems.slice(0, 5),
       topProblemsList: topProblems,
