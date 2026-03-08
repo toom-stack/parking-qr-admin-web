@@ -188,21 +188,22 @@ export const api = {
     return request(`/reports/admin?${qs.toString()}`);
   },
 
-  // ✅ ถ้า backend ของคุณใช้ /reports/admin/:id
+  // ✅ backend จริงของคุณใช้ /reports/:id
   async updateReport(id, payload) {
-    return request(`/reports/admin/${encodeURIComponent(id)}`, {
+    return request(`/reports/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
   },
 
+  // ✅ backend จริงของคุณใช้ /reports/:id
   async deleteReport(id) {
-    return request(`/reports/admin/${encodeURIComponent(id)}`, { method: "DELETE" });
+    return request(`/reports/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
 
   // =========================
-  // Dashboard (ของจริงที่ backend คุณมี)
+  // Dashboard
   // =========================
   async reportsSummary({ from, to, group = "day" } = {}) {
     const qs = new URLSearchParams({
@@ -222,16 +223,19 @@ export const api = {
     return request(`/reports/top-vehicles?${qs.toString()}`);
   },
 
+  // ✅ ใช้ endpoint ใหม่จาก backend
+  async adminSummary() {
+    return request("/reports/admin/summary");
+  },
+
   // =========================
-  // Files (แก้ path ให้ตรง backend)
+  // Files
   // =========================
   qrPngUrl(qrToken) {
-    // ✅ /qr/<token>.png
     return `${BASE_URL}/qr/${encodeURIComponent(qrToken)}.png`;
   },
 
   badgePdfUrl(qrToken) {
-    // ✅ /badge/<token>.pdf
     return `${BASE_URL}/badge/${encodeURIComponent(qrToken)}.pdf`;
   },
 };
