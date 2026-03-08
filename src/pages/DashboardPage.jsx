@@ -8,6 +8,7 @@ import {
   Divider,
   Grid,
   LinearProgress,
+  Paper,
   Stack,
   Typography,
 } from "@mui/material";
@@ -17,6 +18,7 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import PlaceIcon from "@mui/icons-material/Place";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
 
 import {
   ResponsiveContainer,
@@ -78,26 +80,71 @@ function formatDateTime(value) {
   )}:${pad2(d.getMinutes())}`;
 }
 
-function StatCard({ title, value, icon, subtitle }) {
+// ---------------- small components ----------------
+function SectionCard({ title, subtitle, children }) {
   return (
     <Card
       sx={{
+        borderRadius: 4,
+        boxShadow: "0 8px 24px rgba(15,23,42,0.08)",
+        border: "1px solid",
+        borderColor: "divider",
         height: "100%",
-        borderRadius: 3,
-        boxShadow: 3,
       }}
     >
-      <CardContent>
+      <CardContent sx={{ p: 3 }}>
+        <Box mb={2.5}>
+          <Typography variant="h6" fontWeight={800}>
+            {title}
+          </Typography>
+          {subtitle ? (
+            <Typography variant="body2" color="text.secondary" mt={0.5}>
+              {subtitle}
+            </Typography>
+          ) : null}
+        </Box>
+        {children}
+      </CardContent>
+    </Card>
+  );
+}
+
+function StatCard({ title, value, subtitle, icon }) {
+  return (
+    <Card
+      sx={{
+        borderRadius: 4,
+        boxShadow: "0 8px 24px rgba(15,23,42,0.08)",
+        border: "1px solid",
+        borderColor: "divider",
+        height: "100%",
+      }}
+    >
+      <CardContent sx={{ p: 2.5 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-          <Box>
-            <Typography color="text.secondary" variant="body2" gutterBottom>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
               {title}
             </Typography>
-            <Typography variant="h4" fontWeight={700}>
+
+            <Typography
+              variant="h4"
+              fontWeight={800}
+              sx={{
+                lineHeight: 1.1,
+                wordBreak: "break-word",
+              }}
+            >
               {value}
             </Typography>
+
             {subtitle ? (
-              <Typography variant="body2" color="text.secondary" mt={1}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                mt={1}
+                sx={{ lineHeight: 1.5 }}
+              >
                 {subtitle}
               </Typography>
             ) : null}
@@ -105,12 +152,14 @@ function StatCard({ title, value, icon, subtitle }) {
 
           <Box
             sx={{
-              width: 48,
-              height: 48,
-              borderRadius: 2,
+              width: 52,
+              height: 52,
+              borderRadius: 3,
               display: "grid",
               placeItems: "center",
               bgcolor: "action.hover",
+              flexShrink: 0,
+              ml: 1.5,
             }}
           >
             {icon}
@@ -118,6 +167,57 @@ function StatCard({ title, value, icon, subtitle }) {
         </Stack>
       </CardContent>
     </Card>
+  );
+}
+
+function ReportItem({ report }) {
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 2,
+        borderRadius: 3,
+        bgcolor: "background.paper",
+      }}
+    >
+      <Stack
+        direction={{ xs: "column", md: "row" }}
+        spacing={1.5}
+        justifyContent="space-between"
+        alignItems={{ xs: "flex-start", md: "center" }}
+      >
+        <Box>
+          <Typography fontWeight={700} sx={{ mb: 0.5 }}>
+            {report.vehicle?.plateNo || "ไม่ทราบทะเบียน"}
+          </Typography>
+
+          <Stack
+            direction="row"
+            spacing={1}
+            alignItems="center"
+            flexWrap="wrap"
+            useFlexGap
+            sx={{ mb: 1 }}
+          >
+            <Chip
+              size="small"
+              label={problemLabel(report.problemType)}
+              color="warning"
+              variant="outlined"
+            />
+            <Chip
+              size="small"
+              label={`สถานที่: ${report.location || "-"}`}
+              variant="outlined"
+            />
+          </Stack>
+
+          <Typography variant="body2" color="text.secondary">
+            เวลา: {formatDateTime(report.createdAt)}
+          </Typography>
+        </Box>
+      </Stack>
+    </Paper>
   );
 }
 
@@ -180,7 +280,6 @@ export default function DashboardPage() {
     const topP = Object.entries(problemCount).sort((a, b) => b[1] - a[1])[0];
     const topL = Object.entries(locationCount).sort((a, b) => b[1] - a[1])[0];
 
-    // 7 วันล่าสุด
     const days = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
@@ -218,41 +317,59 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <Box p={3}>
-        <Typography variant="h5" fontWeight={700} mb={2}>
+        <Typography variant="h5" fontWeight={800} mb={2}>
           Dashboard
         </Typography>
-        <LinearProgress />
+        <LinearProgress sx={{ borderRadius: 999 }} />
       </Box>
     );
   }
 
   return (
-    <Box p={3}>
-      <Stack
-        direction={{ xs: "column", md: "row" }}
-        justifyContent="space-between"
-        alignItems={{ xs: "flex-start", md: "center" }}
-        mb={3}
-        spacing={1}
+    <Box
+      sx={{
+        p: { xs: 2, md: 3 },
+        bgcolor: "#f8fafc",
+        minHeight: "100vh",
+      }}
+    >
+      <Card
+        sx={{
+          mb: 3,
+          borderRadius: 4,
+          boxShadow: "0 8px 24px rgba(15,23,42,0.08)",
+          border: "1px solid",
+          borderColor: "divider",
+        }}
       >
-        <Box>
-          <Typography variant="h4" fontWeight={800}>
-            Dashboard
-          </Typography>
-          <Typography color="text.secondary">
-            ภาพรวมรายงานปัญหาการจอดรถ
-          </Typography>
-        </Box>
+        <CardContent sx={{ p: 3 }}>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            justifyContent="space-between"
+            alignItems={{ xs: "flex-start", md: "center" }}
+            spacing={2}
+          >
+            <Box>
+              <Typography variant="h4" fontWeight={900}>
+                Dashboard
+              </Typography>
+              <Typography color="text.secondary" mt={0.5}>
+                ภาพรวมรายงานปัญหาการจอดรถ
+              </Typography>
+            </Box>
 
-        <Chip
-          icon={<AccessTimeIcon />}
-          label={`อัปเดตล่าสุด ${formatDateTime(new Date())}`}
-          variant="outlined"
-        />
-      </Stack>
+            <Chip
+              icon={<AccessTimeIcon />}
+              label={`อัปเดตล่าสุด ${formatDateTime(new Date())}`}
+              variant="outlined"
+              sx={{ borderRadius: 999 }}
+            />
+          </Stack>
+        </CardContent>
+      </Card>
 
       {error ? (
-        <Alert severity="error" sx={{ mb: 3 }}>
+        <Alert severity="error" sx={{ mb: 3, borderRadius: 3 }}>
           {error}
         </Alert>
       ) : null}
@@ -262,7 +379,7 @@ export default function DashboardPage() {
           <StatCard
             title="รายงานวันนี้"
             value={todayCount}
-            subtitle="จำนวนเคสที่ถูกรายงานวันนี้"
+            subtitle="จำนวนเคสที่ถูกรายงานในวันนี้"
             icon={<ReportProblemIcon color="error" />}
           />
         </Grid>
@@ -289,118 +406,106 @@ export default function DashboardPage() {
           <StatCard
             title="จุดที่พบปัญหามาก"
             value={topLocation}
-            subtitle="สถานที่ที่ถูกรายงานบ่อยสุด"
+            subtitle="สถานที่ที่ถูกรายงานบ่อยที่สุด"
             icon={<PlaceIcon color="success" />}
           />
         </Grid>
 
         <Grid item xs={12} md={8}>
-          <Card sx={{ borderRadius: 3, boxShadow: 3, height: "100%" }}>
-            <CardContent>
-              <Typography variant="h6" fontWeight={700} mb={2}>
-                รายงาน 7 วันล่าสุด
-              </Typography>
-
-              <Box sx={{ width: "100%", height: 320 }}>
-                <ResponsiveContainer>
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Line
-                      type="monotone"
-                      dataKey="count"
-                      strokeWidth={3}
-                      dot={{ r: 4 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </Box>
-            </CardContent>
-          </Card>
+          <SectionCard
+            title="แนวโน้มรายงาน 7 วันล่าสุด"
+            subtitle="ดูจำนวนรายงานย้อนหลังในแต่ละวัน"
+          >
+            <Box sx={{ width: "100%", height: 320 }}>
+              <ResponsiveContainer>
+                <LineChart
+                  data={chartData}
+                  margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip
+                    formatter={(value) => [`${value} ครั้ง`, "จำนวนรายงาน"]}
+                    labelFormatter={(label) => `วันที่ ${label}`}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="count"
+                    strokeWidth={3}
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </Box>
+          </SectionCard>
         </Grid>
 
         <Grid item xs={12} md={4}>
-          <Card sx={{ borderRadius: 3, boxShadow: 3, height: "100%" }}>
-            <CardContent>
-              <Typography variant="h6" fontWeight={700} mb={2}>
-                ปัญหาที่พบบ่อย
-              </Typography>
-
-              <Stack spacing={1.5}>
-                {topProblemsList.length === 0 ? (
-                  <Typography color="text.secondary">ยังไม่มีข้อมูล</Typography>
-                ) : (
-                  topProblemsList.map((item, index) => (
-                    <Box key={item.label}>
-                      <Stack
-                        direction="row"
-                        justifyContent="space-between"
-                        alignItems="center"
-                      >
-                        <Typography>
+          <SectionCard
+            title="อันดับปัญหาที่พบบ่อย"
+            subtitle="ประเภทปัญหาที่ถูกรายงานบ่อยที่สุด"
+          >
+            <Stack spacing={1.5}>
+              {topProblemsList.length === 0 ? (
+                <Typography color="text.secondary">ยังไม่มีข้อมูล</Typography>
+              ) : (
+                topProblemsList.map((item, index) => (
+                  <Paper
+                    key={item.label}
+                    variant="outlined"
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 3,
+                    }}
+                  >
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      alignItems="center"
+                      spacing={1}
+                    >
+                      <Stack direction="row" spacing={1} alignItems="center" minWidth={0}>
+                        <FiberManualRecordIcon sx={{ fontSize: 10 }} />
+                        <Typography fontWeight={600} sx={{ wordBreak: "break-word" }}>
                           {index + 1}. {item.label}
                         </Typography>
-                        <Chip label={`${item.count} ครั้ง`} size="small" />
                       </Stack>
-                      {index !== topProblemsList.length - 1 ? <Divider sx={{ mt: 1.5 }} /> : null}
-                    </Box>
-                  ))
-                )}
-              </Stack>
-            </CardContent>
-          </Card>
+
+                      <Chip
+                        label={`${item.count} ครั้ง`}
+                        size="small"
+                        sx={{ flexShrink: 0 }}
+                      />
+                    </Stack>
+                  </Paper>
+                ))
+              )}
+            </Stack>
+          </SectionCard>
         </Grid>
 
         <Grid item xs={12}>
-          <Card sx={{ borderRadius: 3, boxShadow: 3 }}>
-            <CardContent>
-              <Typography variant="h6" fontWeight={700} mb={2}>
-                รายงานล่าสุด
-              </Typography>
-
-              <Stack spacing={2}>
-                {latestReports.length === 0 ? (
-                  <Typography color="text.secondary">ยังไม่มีรายงาน</Typography>
-                ) : (
-                  latestReports.map((r, index) => (
-                    <Box key={r.id || index}>
-                      <Stack
-                        direction={{ xs: "column", md: "row" }}
-                        spacing={1}
-                        justifyContent="space-between"
-                        alignItems={{ xs: "flex-start", md: "center" }}
-                      >
-                        <Box>
-                          <Typography fontWeight={700}>
-                            {r.vehicle?.plateNo || "ไม่ทราบทะเบียน"} •{" "}
-                            {problemLabel(r.problemType)}
-                          </Typography>
-
-                          <Typography variant="body2" color="text.secondary">
-                            สถานที่: {r.location || "-"}
-                          </Typography>
-
-                          <Typography variant="body2" color="text.secondary">
-                            เวลา: {formatDateTime(r.createdAt)}
-                          </Typography>
-                        </Box>
-
-                        <Chip
-                          label={problemLabel(r.problemType)}
-                          color="warning"
-                          variant="outlined"
-                        />
-                      </Stack>
-
-                      {index !== latestReports.length - 1 ? <Divider sx={{ mt: 2 }} /> : null}
-                    </Box>
-                  ))
-                )}
-              </Stack>
-            </CardContent>
-          </Card>
+          <SectionCard
+            title="รายงานล่าสุด"
+            subtitle="แสดง 5 รายการล่าสุดที่ถูกบันทึกเข้าสู่ระบบ"
+          >
+            <Stack spacing={1.5}>
+              {latestReports.length === 0 ? (
+                <Typography color="text.secondary">ยังไม่มีรายงาน</Typography>
+              ) : (
+                latestReports.map((r, index) => (
+                  <Box key={r.id || index}>
+                    <ReportItem report={r} />
+                    {index !== latestReports.length - 1 ? (
+                      <Divider sx={{ my: 1, opacity: 0 }} />
+                    ) : null}
+                  </Box>
+                ))
+              )}
+            </Stack>
+          </SectionCard>
         </Grid>
       </Grid>
     </Box>
